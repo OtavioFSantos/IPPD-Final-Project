@@ -8,15 +8,16 @@
  No entanto, não serão aceitas implementações com Pthreads e/ou Sockets.
 */
 
+// PARA EXECUTAR ESTE PROGRAMA:
+// 1) mpic++ velha.cpp -o velha -fopenmp
+// 2) mpirun -np 4 ./velha
+
 #include <iostream>
 #include <vector>
 #include <ctime>
 #include <cstdlib>
 #include <mpi.h>
-
-// PARA EXECUTAR ESTE PROGRAMA:
-// 1) mpic++ velha.cpp -o velha -fopenmp
-// 2) mpirun -np 4 ./velha
+#include <omp.h>
 
 #define SIZE 3
 
@@ -61,7 +62,6 @@ char checkWinner()
         return board[0][2];
     }
 
-    // caso nenhum vencedor encontrado
     return ' ';
 }
 
@@ -110,6 +110,69 @@ void makeComputerMove()
     board[row][col] = 'O';
 }
 
+vector<pair<int, int>> getWinningPositions()
+{
+    vector<pair<int, int>> winningPositions;
+
+#pragma omp parallel
+    {
+// Check rows
+#pragma omp for
+        for (int i = 0; i < SIZE; ++i)
+        {
+            if (board[i][0] == board[i][1] && board[i][1] == board[i][2] && board[i][0] != ' ')
+            {
+#pragma omp critical
+                {
+                    for (int j = 0; j < SIZE; ++j)
+                    {
+                        winningPositions.push_back({i, j});
+                    }
+                }
+            }
+        }
+
+#pragma omp for
+        for (int j = 0; j < SIZE; ++j)
+        {
+            if (board[0][j] == board[1][j] && board[1][j] == board[2][j] && board[0][j] != ' ')
+            {
+#pragma omp critical
+                {
+                    for (int i = 0; i < SIZE; ++i)
+                    {
+                        winningPositions.push_back({i, j});
+                    }
+                }
+            }
+        }
+
+        if (board[0][0] == board[1][1] && board[1][1] == board[2][2] && board[0][0] != ' ')
+        {
+#pragma omp critical
+            {
+                for (int i = 0; i < SIZE; ++i)
+                {
+                    winningPositions.push_back({i, i});
+                }
+            }
+        }
+
+        if (board[0][2] == board[1][1] && board[1][1] == board[2][0] && board[0][2] != ' ')
+        {
+#pragma omp critical
+            {
+                for (int i = 0; i < SIZE; ++i)
+                {
+                    winningPositions.push_back({i, SIZE - 1 - i});
+                }
+            }
+        }
+    }
+
+    return winningPositions;
+}
+
 int main(int argc, char *argv[])
 {
     int rank, size;
@@ -119,7 +182,6 @@ int main(int argc, char *argv[])
 
     srand(time(NULL));
 
-    // inicia o tabuleiro
     for (int i = 0; i < SIZE; ++i)
     {
         for (int j = 0; j < SIZE; ++j)
@@ -131,6 +193,7 @@ int main(int argc, char *argv[])
     int moves = 0;
     char currentPlayer = 'X';
     bool gameOver = false;
+    vector<pair<int, int>> winningPositions;
 
     while (!gameOver)
     {
@@ -174,6 +237,8 @@ int main(int argc, char *argv[])
             if (rank == 0)
             {
                 cout << "Jogador " << winner << " ganhou!" << endl;
+                winningPositions = getWinningPositions();
+                printBoard();
             }
             gameOver = true;
         }
@@ -189,6 +254,15 @@ int main(int argc, char *argv[])
         currentPlayer = (currentPlayer == 'X') ? 'O' : 'X';
 
         MPI_Barrier(MPI_COMM_WORLD);
+    }
+
+    if (!winningPositions.empty() && rank == 0)
+    {
+        cout << "Posição(s) vencedora(s):" << endl;
+        for (auto pos : winningPositions)
+        {
+            cout << pos.first << "," << pos.second << endl;
+        }
     }
 
     MPI_Finalize();
