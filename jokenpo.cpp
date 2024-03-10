@@ -43,10 +43,19 @@ int main(int argc, char *argv[])
     int opponent_rank = (rank + 1) % size;
     MPI_Recv(&opponent_choice, 1, MPI_INT, opponent_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    if (rank != 0)
+#pragma omp parallel default(none) shared(choice)
     {
-        choice = rand() % 3;
-        cout << "Processo " << rank << " escolheu: " << choice << endl;
+#pragma omp single
+        {
+            if (rank != 0)
+            {
+#pragma omp task
+                {
+                    choice = rand() % 3;
+                    cout << "Processo " << rank << " escolheu: " << choice << endl;
+                }
+            }
+        }
     }
 
     MPI_Send(&choice, 1, MPI_INT, opponent_rank, 0, MPI_COMM_WORLD);
