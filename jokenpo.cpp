@@ -41,9 +41,8 @@ int main(int argc, char *argv[])
     MPI_Bcast(&choice, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
     int opponent_rank = (rank + 1) % size;
-    MPI_Recv(&opponent_choice, 1, MPI_INT, opponent_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-#pragma omp parallel default(none) shared(choice)
+#pragma omp parallel default(none) shared(choice, rank, cout)
     {
 #pragma omp single
         {
@@ -58,7 +57,19 @@ int main(int argc, char *argv[])
         }
     }
 
-    MPI_Send(&choice, 1, MPI_INT, opponent_rank, 0, MPI_COMM_WORLD);
+    int send_rank = (rank + 1) % size;
+    int recv_rank = (rank - 1 + size) % size;
+
+    if (rank % 2 == 0)
+    {
+        MPI_Send(&choice, 1, MPI_INT, send_rank, 0, MPI_COMM_WORLD);
+        MPI_Recv(&opponent_choice, 1, MPI_INT, recv_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+    else
+    {
+        MPI_Recv(&opponent_choice, 1, MPI_INT, recv_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Send(&choice, 1, MPI_INT, send_rank, 0, MPI_COMM_WORLD);
+    }
 
     int result;
     if (choice == opponent_choice)
